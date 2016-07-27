@@ -15,7 +15,7 @@ void* set_photohash(struct derdata* idfile, char* photofn, int hashnid) {
 	char tag, length = 0;
 	uint8_t* ptr = (char*)idfile->data;
 	struct derdata* rv = idfile;
-	const EVP_MD *hash = EVP_get_digestbynid(hashnid);
+	const EVP_MD *hash = (hashnid == NID_sha1 ? EVP_sha1() : EVP_sha256());
 	int hashlen = EVP_MD_size(hash);
 
 	do {
@@ -23,12 +23,13 @@ void* set_photohash(struct derdata* idfile, char* photofn, int hashnid) {
 		tag = *ptr++; length = *ptr++;
 	} while(tag != PHOTO_HASH_TAG);
 	if(length != hashlen) {
-		int offset = (ptr - (idfile->data)) - 1;
+		int offset = (ptr - (idfile->data));
 		rv = derdata_new(idfile->len + (hashlen - length));
-		memcpy(rv->data, idfile->data, offset);
-		memcpy(rv->data + offset + 1 + hashlen, ptr + length, (idfile->data - ptr) - length);
+		memcpy(rv->data, idfile->data, idfile->len);
+		memmove(rv->data + offset + hashlen, rv->data + offset + length, idfile->len - offset - length);
 		ptr = (char*)(rv->data + offset);
-		*++ptr = (char)hashlen;
+		ptr[-1] = (uint8_t)hashlen;
+
 		FILE* f = fopen(photofn, "rb");
 		fseek(f, 0, SEEK_END);
 		size_t plen = ftell(f);
